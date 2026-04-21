@@ -231,7 +231,10 @@
                 </div>
                 <div class="recon-row">
                     <span>Less Advance Paid:</span>
-                    <input type="number" step="0.01" id="advancePaid" value="0.00" onchange="saveAdvanceSettings()" oninput="calculateNet()">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="number" step="0.01" id="advancePaid" value="0.00" oninput="calculateNet()">
+                        <button id="saveAdvBtn" class="action-btn" style="background: #10b981; margin: 0; padding: 0.5rem 1rem;" onclick="saveAdvanceSettings()">Save</button>
+                    </div>
                 </div>
                 <div class="recon-row">
                     <span>Auto-Rounding (+/-):</span>
@@ -341,26 +344,55 @@
         } catch (error) { bills = JSON.parse(localStorage.getItem('electionFuelData')) || []; }
 
         try {
-            const setRes = await fetch('/api/settings');
+            // FIXED URL
+            const setRes = await fetch('/api/bills?type=settings');
             if(setRes.ok) {
                 const settings = await setRes.json();
                 document.getElementById('advancePaid').value = settings.advance || 0;
             }
-        } catch (error) { }
+        } catch (error) { console.log("Failed to load advance setting."); }
 
         renderData();
         setNextBillNo();
     }
 
     async function saveAdvanceSettings() {
+        let btn = document.getElementById('saveAdvBtn');
+        if(btn) btn.innerText = "Saving...";
+        
         let advanceVal = parseFloat(document.getElementById('advancePaid').value) || 0;
         try {
-            await fetch('/api/settings', {
+            // FIXED URL
+            const response = await fetch('/api/bills?type=settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ advance: advanceVal })
             });
-        } catch (e) {}
+            
+            // THROW ERROR IF SERVER FAILS
+            if (!response.ok) throw new Error('Failed to save to database');
+            
+            // Visual feedback on success
+            if(btn) {
+                btn.innerText = "Saved!";
+                btn.style.background = "#059669"; // darker green
+                setTimeout(() => {
+                    btn.innerText = "Save";
+                    btn.style.background = "#10b981"; // normal green
+                }, 2000);
+            }
+        } catch (e) {
+            console.error(e);
+            // Visual feedback on error
+            if(btn) {
+                btn.innerText = "Error";
+                btn.style.background = "#ef4444"; // red
+                setTimeout(() => {
+                    btn.innerText = "Save";
+                    btn.style.background = "#10b981"; 
+                }, 2000);
+            }
+        }
         calculateNet();
     }
 
@@ -388,7 +420,6 @@
 
         if(!bNo || !bDate || !vNo || !fType || isNaN(qnty) || isNaN(rate)) { alert("Fill all fields!"); return; }
 
-        // --- ANTI-DUPLICATE WARNING POPUP ---
         const existingBill = bills.find(b => b.billNo === bNo && b.id !== (editId ? parseInt(editId) : null));
         if (existingBill) {
             alert(`Error: Bill No ${bNo} already exists in the system!\nPlease use a different number or edit the existing record.`);
@@ -651,4 +682,3 @@
 </script>
 </body>
 </html>
-
