@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Election Fuel Management Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb; --primary-hover: #1d4ed8; --bg-color: #f8fafc;
+            --text-main: #1f2937; --text-muted: #6b7280;
+            --petrol-bg: #dcfce7; --diesel-bg: #dbeafe; --lub-bg: #fef08a;
+            --danger: #ef4444; --warning: #f59e0b;
+        }
+
+        body { font-family: 'Poppins', sans-serif; background: var(--bg-color); margin: 0; color: var(--text-main); }
+        header { background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%); padding: 1.2rem 2rem; color: white; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 1.4rem; }
+        .btn-export { background: #10b981; color: white; padding: 0.6rem 1.2rem; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        main { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+
+        .form-panel { background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; border-left: 5px solid var(--primary); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; align-items: end; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-bottom: 0.3rem; }
+        .input-group input, .input-group select { width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        .btn-submit { background: var(--primary); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
+        .btn-submit.editing { background: var(--warning); }
+
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .tab-btn { padding: 0.7rem 1.2rem; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        .tab-btn.active { background: var(--primary); color: white; }
+
+        .tab-content { display: none; background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .tab-content.active { display: block; }
+
+        .summary-container { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; }
+        .page-totals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .summary-card { padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; background: #f8fafc; }
+        
+        .reconciliation-panel { background: #eff6ff; padding: 1.5rem; border-radius: 8px; border: 2px solid #bfdbfe; }
+        .recon-row { display: flex; justify-content: space-between; margin-bottom: 0.8rem; align-items: center; font-weight: 500;}
+        .recon-row input { width: 100px; padding: 0.4rem; text-align: right; border: 1px solid #cbd5e1; border-radius: 4px; font-weight: bold; background: white;}
+        .net-total { font-size: 1.3rem; color: #166534; font-weight: bold; border-top: 2px solid #bfdbfe; padding-top: 0.8rem; margin-top: 0.8rem; }
+
+        .missing-bills-panel { margin-top: 1.5rem; padding: 1rem; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; color: #991b1b; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.8rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; color: var(--text-muted); }
+        tr.Petrol { background: var(--petrol-bg); }
+        tr.Diesel { background: var(--diesel-bg); }
+        tr.Lubricant { background: var(--lub-bg); }
+        .total-row { font-weight: bold; background: #f1f5f9; }
+        
+        button.action-btn { color: white; border: none; padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer; margin-right: 0.2rem; }
+        .edit-btn { background: var(--warning); color: black;}
+        .del-btn { background: var(--danger); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Election Fuel Management Dashboard</h1>
+    <button class="btn-export" onclick="exportToExcel()">📥 Export to Excel</button>
+</header>
+
+<main>
+    <div class="form-panel">
+        <input type="hidden" id="editId" value="">
+        <div class="form-grid" id="entryForm">
+            <div class="input-group">
+                <label>Bill No</label>
+                <input type="number" id="billNo" required>
+            </div>
+            <div class="input-group">
+                <label>Date</label>
+                <input type="date" id="billDate" required>
+            </div>
+            <div class="input-group">
+                <label>Vehicle No</label>
+                <input type="text" id="vehicleNo" placeholder="WB..." required>
+            </div>
+            <div class="input-group">
+                <label>Fuel Type</label>
+                <select id="fuelType" onchange="autoFillRate()" required>
+                    <option value="" disabled selected>Select...</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="Petrol">Petrol</option>
+                    <option value="Lubricant">Lubricant</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Quantity (Ltrs)</label>
+                <input type="number" step="0.01" id="qnty" required>
+            </div>
+            <div class="input-group">
+                <label>Rate (₹)</label>
+                <input type="number" step="0.01" id="rate" required>
+            </div>
+            <div class="input-group">
+                <button type="button" id="submitBtn" class="btn-submit" onclick="saveRecord()">+ Add Bill (Enter)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('summary')">🏠 Home Summary</button>
+        <button class="tab-btn" onclick="switchTab('sheet1')">Bills 1-50</button>
+        <button class="tab-btn" onclick="switchTab('sheet2')">Bills 51-100</button>
+        <button class="tab-btn" onclick="switchTab('sheet3')">Bills 101-150</button>
+        <button class="tab-btn" onclick="switchTab('sheet4')">Bills 151-200</button>
+    </div>
+
+    <div id="summary" class="tab-content active">
+        <div class="summary-container">
+            <div>
+                <div class="page-totals-grid">
+                    <div class="summary-card" id="sum-page1"><h4>Bills 1 - 50</h4><p>Qnty: 0.00 | Amt: ₹0.00</p></div>
+                    <div class="summary-card" id="sum-page2"><h4>Bills 51 - 100</h4><p>Qnty: 0.00 | Amt: ₹0.00</p></div>
+                    <div class="summary-card" id="sum-page3"><h4>Bills 101 - 150</h4><p>Qnty: 0.00 | Amt: ₹0.00</p></div>
+                    <div class="summary-card" id="sum-page4"><h4>Bills 151 - 200</h4><p>Qnty: 0.00 | Amt: ₹0.00</p></div>
+                </div>
+                
+                <div class="missing-bills-panel">
+                    <strong>⚠️ Missing Bills Check:</strong> 
+                    <span id="missingList">Loading...</span>
+                </div>
+            </div>
+            
+            <div class="reconciliation-panel">
+                <h3 style="margin-top:0; color:var(--primary);">Final Calculation</h3>
+                <div class="recon-row">
+                    <span>Grand Total:</span>
+                    <span id="grandTotalText">₹0.00</span>
+                </div>
+                <div class="recon-row">
+                    <span>Less Advance:</span>
+                    <input type="number" step="0.01" id="advancePaid" value="0.00" oninput="calculateNet()">
+                </div>
+                <div class="recon-row">
+                    <span>Auto-Rounding (+/-):</span>
+                    <input type="number" id="roundingOff" readonly title="Automatically rounds to nearest Rupee">
+                </div>
+                <div class="recon-row net-total">
+                    <span>NET AMOUNT:</span>
+                    <span id="netPayableText">₹0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sheet1" class="tab-content"><table id="table1"><thead><tr><th>Bill No</th><th>Date</th><th>Vehicle</th><th>Fuel</th><th>Qnty</th><th>Rate</th><th>Amount</th><th>Actions</th></tr></thead><tbody id="tb1"></tbody></table></div>
+    <div id="sheet2" class="tab-content"><table id="table2"><thead><tr><th>Bill No</th><th>Date</th><th>Vehicle</th><th>Fuel</th><th>Qnty</th><th>Rate</th><th>Amount</th><th>Actions</th></tr></thead><tbody id="tb2"></tbody></table></div>
+    <div id="sheet3" class="tab-content"><table id="table3"><thead><tr><th>Bill No</th><th>Date</th><th>Vehicle</th><th>Fuel</th><th>Qnty</th><th>Rate</th><th>Amount</th><th>Actions</th></tr></thead><tbody id="tb3"></tbody></table></div>
+    <div id="sheet4" class="tab-content"><table id="table4"><thead><tr><th>Bill No</th><th>Date</th><th>Vehicle</th><th>Fuel</th><th>Qnty</th><th>Rate</th><th>Amount</th><th>Actions</th></tr></thead><tbody id="tb4"></tbody></table></div>
+
+</main>
+
+<script>
+    let bills = [];
+    let currentGrandTotal = 0;
+    let pageTotals = [];
+
+    // INIT: Fetch from Vercel Backend (Fallback to LocalStorage if backend fails)
+    async function init() {
+        document.getElementById('billDate').valueAsDate = new Date();
+        try {
+            const response = await fetch('/api/bills');
+            if(response.ok) {
+                bills = await response.json();
+            } else throw new Error('Backend not connected');
+        } catch (error) {
+            console.log("Using Local Storage Fallback");
+            bills = JSON.parse(localStorage.getItem('electionFuelData')) || [];
+        }
+        renderData();
+        setNextBillNo();
+    }
+
+    function setNextBillNo() {
+        if(document.getElementById('editId').value !== "") return;
+        let maxBill = bills.length > 0 ? Math.max(...bills.map(b => b.billNo)) : 0;
+        document.getElementById('billNo').value = maxBill + 1;
+    }
+
+    function autoFillRate() {
+        const type = document.getElementById('fuelType').value;
+        const rateInput = document.getElementById('rate');
+        if(type === 'Diesel') rateInput.value = 92.31;
+        else if(type === 'Petrol') rateInput.value = 105.71;
+    }
+
+    // SAVE OR UPDATE
+    async function saveRecord() {
+        const editId = document.getElementById('editId').value;
+        const bNo = parseInt(document.getElementById('billNo').value);
+        const bDate = document.getElementById('billDate').value;
+        const vNo = document.getElementById('vehicleNo').value;
+        const fType = document.getElementById('fuelType').value;
+        const qnty = parseFloat(document.getElementById('qnty').value);
+        const rate = parseFloat(document.getElementById('rate').value);
+
+        if(!bNo || !bDate || !vNo || !fType || isNaN(qnty) || isNaN(rate)) { alert("Fill all fields!"); return; }
+
+        const record = { 
+            id: editId ? parseInt(editId) : Date.now(), 
+            billNo: bNo, date: bDate, vehicleNo: vNo, fuelType: fType, 
+            qnty: qnty, rate: rate, amount: qnty * rate 
+        };
+
+        try {
+            await fetch('/api/bills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record)
+            });
+        } catch(e) {
+            // Local fallback
+            localStorage.setItem('electionFuelData', JSON.stringify([...bills.filter(b=>b.id !== record.id), record]));
+        }
+
+        bills = bills.filter(b => b.id !== record.id); 
+        bills.push(record);
+
+        // Reset Form
+        document.getElementById('editId').value = "";
+        document.getElementById('submitBtn').innerText = "+ Add Bill (Enter)";
+        document.getElementById('submitBtn').classList.remove('editing');
+        document.getElementById('vehicleNo').value = '';
+        document.getElementById('qnty').value = '';
+        
+        renderData();
+        setNextBillNo();
+        document.getElementById('vehicleNo').focus();
+    }
+
+    // ENTER KEY LISTENER
+    document.getElementById('entryForm').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveRecord(); }
+    });
+
+    // EDIT RECORD
+    function editRecord(id) {
+        const record = bills.find(b => b.id === id);
+        if(!record) return;
+        document.getElementById('editId').value = record.id;
+        document.getElementById('billNo').value = record.billNo;
+        document.getElementById('billDate').value = record.date;
+        document.getElementById('vehicleNo').value = record.vehicleNo;
+        document.getElementById('fuelType').value = record.fuelType;
+        document.getElementById('qnty').value = record.qnty;
+        document.getElementById('rate').value = record.rate;
+        
+        let btn = document.getElementById('submitBtn');
+        btn.innerText = "💾 Save Edit";
+        btn.classList.add('editing');
+        window.scrollTo(0,0);
+    }
+
+    // DELETE RECORD
+    async function deleteRecord(id) {
+        if(confirm("Delete this bill?")) {
+            try {
+                await fetch('/api/bills', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                });
+            } catch(e) {
+                // Local fallback update
+            }
+            bills = bills.filter(b => b.id !== id);
+            localStorage.setItem('electionFuelData', JSON.stringify(bills));
+            renderData();
+        }
+    }
+
+    // RENDER UI
+    function renderData() {
+        bills.sort((a, b) => a.billNo - b.billNo);
+        pageTotals = [ {q:0, a:0}, {q:0, a:0}, {q:0, a:0}, {q:0, a:0} ]; 
+        let tbHTML = ["", "", "", ""];
+
+        bills.forEach(b => {
+            let pageIdx = b.billNo <= 50 ? 0 : b.billNo <= 100 ? 1 : b.billNo <= 150 ? 2 : 3;
+            pageTotals[pageIdx].q += b.qnty; pageTotals[pageIdx].a += b.amount;
+
+            tbHTML[pageIdx] += `<tr class="${b.fuelType}">
+                <td><strong>${b.billNo}</strong></td><td>${b.date}</td><td>${b.vehicleNo}</td>
+                <td>${b.fuelType}</td><td>${b.qnty.toFixed(2)}</td><td>₹${b.rate.toFixed(2)}</td>
+                <td><strong>₹${b.amount.toFixed(2)}</strong></td>
+                <td>
+                    <button class="action-btn edit-btn" onclick="editRecord(${b.id})">Edit</button>
+                    <button class="action-btn del-btn" onclick="deleteRecord(${b.id})">Del</button>
+                </td>
+            </tr>`;
+        });
+
+        for(let i=0; i<4; i++) {
+            document.getElementById(`tb${i+1}`).innerHTML = tbHTML[i] + 
+                (pageTotals[i].q > 0 ? `<tr class="total-row"><td colspan="4" style="text-align:right">PAGE TOTAL:</td><td>${pageTotals[i].q.toFixed(2)} L</td><td></td><td>₹${pageTotals[i].a.toFixed(2)}</td><td></td></tr>` : "");
+            document.getElementById(`sum-page${i+1}`).innerHTML = `<h4>Bills ${i*50+1} - ${(i+1)*50}</h4><p>Total Qnty: <strong>${pageTotals[i].q.toFixed(2)} L</strong><br>Total Amt: <strong>₹${pageTotals[i].a.toFixed(2)}</strong></p>`;
+        }
+
+        currentGrandTotal = pageTotals.reduce((sum, page) => sum + page.a, 0);
+        document.getElementById('grandTotalText').innerText = `₹${currentGrandTotal.toFixed(2)}`;
+        
+        checkMissingBills();
+        calculateNet();
+    }
+
+    // MISSING BILLS CHECKER
+    function checkMissingBills() {
+        if(bills.length === 0) { document.getElementById('missingList').innerText = "No bills entered yet."; return; }
+        let max = Math.max(...bills.map(b => b.billNo));
+        let existing = new Set(bills.map(b => b.billNo));
+        let missing = [];
+        for(let i=1; i<=max; i++) { if(!existing.has(i)) missing.push(i); }
+        
+        document.getElementById('missingList').innerText = missing.length > 0 
+            ? missing.join(", ") 
+            : `None! All bills from 1 to ${max} are perfectly continuous.`;
+    }
+
+    // AUTO ROUNDING & NET AMOUNT
+    function calculateNet() {
+        let advance = parseFloat(document.getElementById('advancePaid').value) || 0;
+        let preNet = currentGrandTotal - advance;
+        
+        // Auto Round to nearest integer
+        let finalNet = Math.round(preNet);
+        let roundingValue = finalNet - preNet;
+
+        document.getElementById('roundingOff').value = roundingValue.toFixed(2);
+        document.getElementById('netPayableText').innerText = `₹${finalNet.toFixed(2)}`;
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    // PRECISE EXCEL EXPORT MATCHING THE PHOTO
+    function exportToExcel() {
+        let wb = XLSX.utils.book_new();
+
+        // 1. Build the Data Sheets (1-50, etc)
+        const formatForExcel = (arr) => {
+            let data = arr.map(b => ({"Bill No": b.billNo, "Date": b.date, "Vehicle No": b.vehicleNo, "Fuel Type": b.fuelType, "Quantity Ltr": b.qnty, "Rate": b.rate, "Amount": b.amount}));
+            let tQ = data.reduce((s, r) => s + r["Quantity Ltr"], 0), tA = data.reduce((s, r) => s + r.Amount, 0);
+            data.push({"Bill No": "TOTAL", "Date": "", "Vehicle No": "", "Fuel Type": "", "Quantity Ltr": tQ, "Rate": "", "Amount": tA});
+            return data;
+        };
+        if(bills.filter(b => b.billNo <= 50).length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatForExcel(bills.filter(b => b.billNo <= 50))), "Bills 1-50");
+        if(bills.filter(b => b.billNo > 50 && b.billNo <= 100).length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatForExcel(bills.filter(b => b.billNo > 50 && b.billNo <= 100))), "Bills 51-100");
+        if(bills.filter(b => b.billNo > 100 && b.billNo <= 150).length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatForExcel(bills.filter(b => b.billNo > 100 && b.billNo <= 150))), "Bills 101-150");
+
+        // 2. Build the Exact Front Page Layout
+        let advance = parseFloat(document.getElementById('advancePaid').value) || 0;
+        let preNet = currentGrandTotal - advance;
+        let finalNet = Math.round(preNet);
+        let roundingValue = finalNet - preNet;
+        let totalQnty = pageTotals.reduce((sum, page) => sum + page.q, 0);
+
+        let frontPageData = [
+            ["LOKSABHA GENERAL ELECTION 2024 DIESEL & LUB SUPPLY"],
+            [],
+            ["PAGE NO", "QUANTITY LTR", "RATE", "AMOUNT"]
+        ];
+
+        // Add rows for each populated page
+        pageTotals.forEach((page, index) => {
+            if(page.q > 0) {
+                // If all bills on a page have the same rate, show it. Otherwise show "Var."
+                let pageBills = bills.filter(b => b.billNo > (index*50) && b.billNo <= ((index+1)*50));
+                let uniformRate = pageBills.every(b => b.rate === pageBills[0].rate) ? pageBills[0].rate : "Var.";
+                frontPageData.push([index + 1, page.q, uniformRate, page.a]);
+            }
+        });
+
+        frontPageData.push(["TOTAL", totalQnty, "", currentGrandTotal]);
+        frontPageData.push(["Rounding Off", "", "", roundingValue]);
+        frontPageData.push(["Less Advance", "", "", advance]);
+        frontPageData.push(["NET AMOUNT", "", "", finalNet]);
+
+        let ws = XLSX.utils.aoa_to_sheet(frontPageData);
+        XLSX.utils.book_append_sheet(wb, ws, "Master Bill Print");
+
+        XLSX.writeFile(wb, "Election_Fuel_Final.xlsx");
+    }
+
+    init();
+</script>
+</body>
+</html>
