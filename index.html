@@ -1424,9 +1424,10 @@
             right: { style: "thin", color: { rgb: "000000" } }
         };
         
+        // Data Sheets font size is 12
         const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 }, fill: { fgColor: { rgb: "004b87" } }, alignment: { horizontal: "center", vertical: "center", wrapText: true }, border: borderAll };
-        const dataStyle = { alignment: { horizontal: "center", vertical: "center" }, border: thinBorderAll };
-        const dataStyleBold = { font: { bold: true }, alignment: { horizontal: "center", vertical: "center" }, border: borderAll };
+        const dataStyle = { alignment: { horizontal: "center", vertical: "center" }, border: thinBorderAll, font: { sz: 12 } };
+        const dataStyleBold = { font: { bold: true, sz: 12 }, alignment: { horizontal: "center", vertical: "center" }, border: borderAll };
 
         let maxBillNo = Math.max(...filteredBills.map(b => b.billNo));
         let numPages = Math.ceil(maxBillNo / PAGE_SIZE) || 1;
@@ -1476,7 +1477,8 @@
             let sheetName = `Bills ${startBill}-${endBill}`;
             XLSX.utils.book_append_sheet(wbout, ws, sheetName);
             
-            exportPageTotals.push({ name: sheetName, q: pQnty, a: pAmount }); // Rate removed from push
+            // Only pushing Name, Quantity, and Amount to the Master (NO RATE)
+            exportPageTotals.push({ name: sheetName, q: pQnty, a: pAmount }); 
         }
 
         // 4. CREATE BIG, INVOICE-STYLE MASTER PAGE (3 COLUMNS ONLY)
@@ -1485,18 +1487,22 @@
         let finalNet = Math.round(preNet);
         let roundingValue = finalNet - preNet;
 
-        let dateRangeStr = (fromDate || toDate) ? `PURPOSE / EVENT: FILTERED DATES (${fromDate ? fromDate : 'START'} to ${toDate ? toDate : 'END'})` : "PURPOSE / EVENT: ___________________________________";
+        let dateRangeStr = (fromDate || toDate) ? `FILTERED DATE RANGE: ${fromDate ? fromDate : 'START'} to ${toDate ? toDate : 'END'}` : "DATE RANGE: CONSOLIDATED (ALL DATES)";
+        
+        // Blank explicit purpose line for pen entry
+        let purposeStr = "PURPOSE / EVENT: _____________________________________________";
 
         let masterData = [
             ["M/S. BAHAR SERVICE STATION (CC-220994)", "", ""],
             ["OFFICIAL RECORD: FOR REVIEW", "", ""],
             ["CONSOLIDATED DIESEL & LUB SUPPLY RECORD", "", ""],
             [dateRangeStr, "", ""],
+            [purposeStr, "", ""],
             ["", "", ""],
-            ["PAGE NO", "QUANTITY LTR", "AMOUNT"]
+            ["PAGE REFERENCE", "TOTAL QUANTITY (LTR)", "TOTAL AMOUNT (₹)"]
         ];
 
-        let startDataRow = 6; 
+        let startDataRow = 7; 
 
         exportPageTotals.forEach(p => { masterData.push([p.name, p.q, p.a]); });
         
@@ -1506,8 +1512,8 @@
         let summaryStartRow = masterData.length;
         masterData.push(["GROSS TOTAL", totalQntyAll, totalAmountAll]);
         masterData.push(["Rounding Off (+/-)", "", roundingValue]);
-        masterData.push(["Less Advance", "", advance]);
-        masterData.push(["EST. NET AMOUNT", "", finalNet]);
+        masterData.push(["Less Advance Paid", "", advance]);
+        masterData.push(["NET AMOUNT PAYABLE", "", finalNet]);
 
         let termsStartRow = masterData.length;
         masterData.push(["", "", ""]);
@@ -1523,6 +1529,7 @@
             { s: {r: 1, c: 0}, e: {r: 1, c: 2} }, // Subtitle 1
             { s: {r: 2, c: 0}, e: {r: 2, c: 2} }, // Subtitle 2
             { s: {r: 3, c: 0}, e: {r: 3, c: 2} }, // Date Range
+            { s: {r: 4, c: 0}, e: {r: 4, c: 2} }, // Purpose Line
             
             // Deductions
             { s: {r: summaryStartRow + 1, c: 0}, e: {r: summaryStartRow + 1, c: 1} },
@@ -1540,16 +1547,18 @@
             {hpt: 30}, // Subtitle 1
             {hpt: 30}, // Subtitle 2
             {hpt: 30}, // Date Range
+            {hpt: 30}, // Purpose
             {hpt: 15}, // Spacer
             {hpt: 50}  // Table Header
         ];
 
+        // Master Font Sizes set to 14
         const masterDataStyle = { alignment: { horizontal: "center", vertical: "center" }, border: borderAll, font: { sz: 14 } };
         const masterSummaryTitleStyle = { alignment: { horizontal: "right", vertical: "center" }, border: borderAll, font: { bold: true, sz: 14 } };
         const masterNetStyle = { alignment: { horizontal: "right", vertical: "center" }, border: borderAll, font: { bold: true, sz: 18, color: { rgb: "000000" } }, fill: { fgColor: { rgb: "e2e8f0" } } };
         
         const termsHeaderStyle = { font: { sz: 14, bold: true, underline: true }, alignment: { horizontal: "left", vertical: "center" } };
-        const termsStyle = { font: { sz: 12, bold: false }, alignment: { horizontal: "left", vertical: "center" } };
+        const termsStyle = { font: { sz: 14, bold: false }, alignment: { horizontal: "left", vertical: "center" } };
 
         for (let R = 0; R < masterData.length; ++R) {
             // Apply Taller Heights to give the Invoice Feel
@@ -1565,12 +1574,16 @@
                 else if (R === 1) wsMaster[cellRef].s = { font: { bold: true, sz: 16, color: { rgb: "333333" } }, alignment: { horizontal: "center", vertical: "center" } };
                 else if (R === 2) wsMaster[cellRef].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: "center", vertical: "center" } };
                 else if (R === 3) wsMaster[cellRef].s = { font: { italic: true, sz: 14, color: { rgb: "64748b" } }, alignment: { horizontal: "center", vertical: "center" } };
-                else if (R === 5) wsMaster[cellRef].s = { ...headerStyle, font: { bold: true, color: { rgb: "FFFFFF" }, sz: 14 } };
+                else if (R === 4) wsMaster[cellRef].s = { font: { bold: true, sz: 14, color: { rgb: "1e293b" } }, alignment: { horizontal: "center", vertical: "center" } };
+                
+                // Centered Table Headers (Size 14)
+                else if (R === 6) wsMaster[cellRef].s = { ...headerStyle, font: { bold: true, color: { rgb: "FFFFFF" }, sz: 14 }, alignment: { horizontal: "center", vertical: "center" } };
                 
                 // Invoice Table Data
                 else if (R >= startDataRow && R < emptyRowIdx) {
                     wsMaster[cellRef].s = masterDataStyle;
-                    if(C === 0) wsMaster[cellRef].s = { ...masterDataStyle, alignment: { horizontal: "left", vertical: "center" }, font: { bold: true, sz: 14 } };
+                    // Centered PAGE REFERENCE column and Size 14
+                    if(C === 0) wsMaster[cellRef].s = { ...masterDataStyle, alignment: { horizontal: "center", vertical: "center" }, font: { bold: true, sz: 14 } };
                 }
                 // Gross Total
                 else if (R === summaryStartRow) {
@@ -1588,7 +1601,7 @@
                     if (C <= 1) wsMaster[cellRef].s = masterNetStyle;
                     else wsMaster[cellRef].s = { ...masterNetStyle, alignment: { horizontal: "center", vertical: "center" } };
                 }
-                // Terms and Conditions Section (No Borders)
+                // Terms and Conditions Section (No Borders, Size 14)
                 else if (R === termsStartRow + 1) {
                     wsMaster[cellRef].s = termsHeaderStyle;
                 }
